@@ -1,0 +1,23 @@
+npm init -y  = Bu komut projeyi bir Node.js projesi olarak etiketler.
+express: Web sunucusu.
+sequelize: Veritabanı yönetimi (ORM).
+
+pg ve pg-hstore: PostgreSQL sürücüleri.
+
+dotenv: Şifreleri gizlemek için (.env dosyası).
+
+cors: Frontend (Next.js) ile Backend'in konuşabilmesi için izin.
+
+multer: Fiş fotoğrafını yükleyebilmek için dosya yöneticisi.
+
+@google/generative-ai: Gemini API ile konuşmak için.
+
+npm install --save-dev nodemon = Geliştirici Aracı (Nodemon): Kodda değişiklik yaptığında sunucuyu kapatıp açmakla uğraşmamak için:
+
+Şifrelerimizi kodun içine açık açık yazmamak için .env
+
+npx create-next-app@latest client ile next.js altyapısını olusturuyoruz
+
+bcryptjs: Şifreleri veritabanında 123456 diye açık tutmamak, kriptolamak için.
+
+jsonwebtoken: Kullanıcı giriş yapınca ona dijital bir kimlik kartı (Token) vermek için.
