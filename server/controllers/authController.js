@@ -54,17 +54,32 @@ exports.login = async (req, res) => {
 };
 
 // ⚙️ AYARLARI GÜNCELLE (Profesyonel Yöntem)
+// server/controllers/authController.js
+
+// ... (Diğer fonksiyonlar aynı kalsın)
+
+// ⚙️ AYARLARI GÜNCELLE
 exports.updateSettings = async (req, res) => {
     try {
-        // 👇 income parametresini ekledik
         const { userId, name, budget, income, currency } = req.body;
         
-        // 👇 Update kısmına income'ı ekledik
-        await User.update({ name, budget, income, currency }, { where: { id: userId } });
+        console.log("Gelen Güncelleme İsteği:", req.body); // Hata ayıklama için log
+
+        // Veritabanını güncelle
+        // DİKKAT: income ve budget değerlerini float'a çevirerek kaydediyoruz garanti olsun diye
+        await User.update({ 
+            name, 
+            budget: parseFloat(budget), 
+            income: parseFloat(income), 
+            currency 
+        }, { where: { id: userId } });
         
+        // Güncel veriyi geri dön (Bu kısım çok önemli, Frontend bunu bekliyor)
         const updatedUser = await User.findByPk(userId);
+        
         res.json({ message: "Ayarlar güncellendi.", user: updatedUser });
     } catch (error) {
+        console.error("Ayarlar Güncelleme Hatası:", error);
         res.status(500).json({ error: "Güncelleme başarısız." });
     }
 };

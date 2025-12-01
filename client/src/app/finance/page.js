@@ -37,17 +37,38 @@ export default function Finance() {
     const handleSave = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/auth/settings', {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, income, budget, name: user.name, currency: user.currency }),
+                body: JSON.stringify({ 
+                    userId: user.id, 
+                    income: parseFloat(income), // Sayı olduğundan emin olalım
+                    budget: parseFloat(budget), 
+                    name: user.name, 
+                    currency: user.currency 
+                }),
             });
+
+            const data = await res.json(); // Cevabı JSON olarak al
+
             if (res.ok) {
-                updateUser({ income, budget });
+                // 👇 KRİTİK DÜZELTME: Backend'den dönen güncel 'user' objesiyle context'i güncelle
+                // data.user içinde güncel income var.
+                if (data.user) {
+                    updateUser(data.user); 
+                } else {
+                    // Eğer backend user dönmezse manuel güncelle
+                    updateUser({ ...user, income, budget });
+                }
+                
                 setMsg('Güncellendi! ✅');
                 setTimeout(() => setMsg(''), 3000);
+            } else {
+                console.error("Hata:", data.error);
             }
-        } catch (error) { console.error(error); } 
+        } catch (error) { 
+            console.error("Bağlantı hatası:", error); 
+        } 
         finally { setLoading(false); }
     };
 
