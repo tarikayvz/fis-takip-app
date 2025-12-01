@@ -11,7 +11,7 @@ import {
     Search, Calendar, Wallet, Receipt, TrendingUp, AlertCircle, 
     Store, PieChart, CalendarDays, CalendarRange, Settings, HelpCircle, FileText, Loader2,
     TrendingDown, PiggyBank, Clock, PlusCircle, X, CalendarCheck, MessageCircle, Send,
-    RefreshCw, Target, CheckCircle, Printer, Download, Save, Pencil // İkonlar
+    RefreshCw, Target, CheckCircle, Printer, Download, Save, Pencil, Menu // 👈 Menu ikonu eklendi
 } from 'lucide-react'; 
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
 
@@ -21,7 +21,7 @@ export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // --- STATE ---
+  // STATE
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('');
   const [receipts, setReceipts] = useState([]);
@@ -33,9 +33,11 @@ export default function Home() {
   const [budget, setBudget] = useState(0);
   const [income, setIncome] = useState(0);
 
-  // Modals
+  // Modals & UI
   const [isManualOpen, setIsManualOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 👇 MOBİL MENÜ İÇİN STATE
   const [manualData, setManualData] = useState({ merchantName: '', date: new Date().toISOString().slice(0, 10), totalAmount: '', category: 'Diğer', isRecurring: false });
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [goals, setGoals] = useState([]);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [newGoalData, setNewGoalData] = useState({ title: '', targetAmount: '', color: 'bg-indigo-500' });
@@ -66,17 +68,12 @@ export default function Home() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
   const getAuthHeaders = () => ({ 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
-
-  // --- API ---
-  // Vercel'de API_URL env variable'ı, localde localhost kullanılır.
-  // AuthContext zaten API_URL'i yönetiyor ama burada fetch içinde tam url vermek yerine relative path (/api/...) 
-  // kullanmak next.js rewrites/proxy ayarı yoksa sorun olabilir.
-  // AuthContext'teki API_URL mantığını buraya da taşıyalım garanti olsun.
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+  // API Calls
   const fetchReceipts = async () => { try { const res = await fetch(`${API_URL}/api/receipts`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }); const data = await res.json(); if(Array.isArray(data)) setReceipts(data); } catch (error) { console.error("Hata:", error); } };
   const fetchGoals = async () => { try { const res = await fetch(`${API_URL}/api/goals`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }); const data = await res.json(); if(Array.isArray(data)) setGoals(data); } catch (error) { console.error(error); } };
-
+  
   const handleDelete = async (e, id) => { e.stopPropagation(); if(!confirm("Silmek istediğine emin misin?")) return; try { const res = await fetch(`${API_URL}/api/receipts/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); if (res.ok) { setReceipts(receipts.filter(item => item.id !== id)); if(selectedReceipt?.id === id) setSelectedReceipt(null); } } catch (error) { console.error(error); } };
   const handleUpload = async () => { if (!file) { alert("Resim seç!"); return; } setStatus('AI Analiz Ediyor... ⏳'); const formData = new FormData(); formData.append('image', file); try { const res = await fetch(`${API_URL}/api/receipts/upload`, { method: 'POST', body: formData, headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }); if (res.ok) { setStatus('Başarılı! ✅'); fetchReceipts(); setTimeout(() => setStatus(''), 3000); } else { setStatus('Hata oluştu.'); } } catch (error) { setStatus('Sunucu hatası.'); } };
   const handleManualSubmit = async (e) => { e.preventDefault(); if(!manualData.totalAmount) return alert("Tutar giriniz!"); try { const res = await fetch(`${API_URL}/api/receipts/manual`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(manualData) }); if(res.ok) { fetchReceipts(); setIsManualOpen(false); setManualData({ merchantName: '', date: new Date().toISOString().slice(0, 10), totalAmount: '', category: 'Diğer', isRecurring: false }); setStatus('Harcama Eklendi! ✍️'); setTimeout(() => setStatus(''), 3000); } else { alert("Kaydedilemedi."); } } catch (error) { console.error(error); } };
@@ -84,35 +81,16 @@ export default function Home() {
   const handleUpdateGoal = async (id) => { const add = prompt("Ne kadar eklemek istiyorsun?", "0"); if(!add) return; try { await fetch(`${API_URL}/api/goals/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ amount: parseFloat(add) }) }); fetchGoals(); fetchReceipts(); } catch (error) { console.error(error); } };
   const handleDeleteGoal = async (e, id) => { e.stopPropagation(); if(!confirm("Hedefi silmek istiyor musun?")) return; try { await fetch(`${API_URL}/api/goals/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); fetchGoals(); fetchReceipts(); } catch (error) { console.error(error); } };
   const handleSendMessage = async (e) => { e.preventDefault(); if (!chatInput.trim()) return; const userMessage = chatInput; setChatMessages(prev => [...prev, { role: 'user', text: userMessage }]); setChatInput(''); setChatLoading(true); try { const res = await fetch(`${API_URL}/api/receipts/chat`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ message: userMessage }) }); const data = await res.json(); setChatMessages(prev => [...prev, { role: 'ai', text: data.reply || "Hata." }]); } catch (error) { setChatMessages(prev => [...prev, { role: 'ai', text: "Bağlantı hatası ❌" }]); } finally { setChatLoading(false); } };
-  
-  // DÜZENLEME (EDIT)
-  const handleItemChange = (index, field, value) => {
-      const newItems = [...selectedReceipt.items];
-      newItems[index][field] = field === 'price' ? parseFloat(value) || 0 : value;
-      const newTotal = newItems.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0);
-      setSelectedReceipt({ ...selectedReceipt, items: newItems, totalAmount: newTotal });
-  };
+  const handleItemChange = (index, field, value) => { const newItems = [...selectedReceipt.items]; newItems[index][field] = field === 'price' ? parseFloat(value) || 0 : value; const newTotal = newItems.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0); setSelectedReceipt({ ...selectedReceipt, items: newItems, totalAmount: newTotal }); };
   const handleReceiptChange = (field, value) => { setSelectedReceipt({ ...selectedReceipt, [field]: value }); };
-  const handleSaveDetails = async () => {
-      try {
-          const res = await fetch(`${API_URL}/api/receipts/${selectedReceipt.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ merchantName: selectedReceipt.merchantName, date: selectedReceipt.date, totalAmount: selectedReceipt.totalAmount, category: selectedReceipt.category, items: selectedReceipt.items }) });
-          if (res.ok) { alert("Güncellendi! ✅"); fetchReceipts(); setSelectedReceipt(null); } else { alert("Hata oluştu."); }
-      } catch (error) { console.error(error); }
-  };
+  const handleSaveDetails = async () => { try { const res = await fetch(`${API_URL}/api/receipts/${selectedReceipt.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ merchantName: selectedReceipt.merchantName, date: selectedReceipt.date, totalAmount: selectedReceipt.totalAmount, category: selectedReceipt.category, items: selectedReceipt.items }) }); if (res.ok) { alert("Güncellendi! ✅"); fetchReceipts(); setSelectedReceipt(null); } else { alert("Hata oluştu."); } } catch (error) { console.error(error); } };
 
-  // FİLTRELEME
-  const filteredReceipts = receipts.filter(receipt => {
-    const textMatch = receipt.merchantName?.toLowerCase().includes(searchTerm.toLowerCase()) || receipt.category?.toLowerCase().includes(searchTerm.toLowerCase());
-    let dateMatch = true; if (startDate && receipt.date < startDate) dateMatch = false; if (endDate && receipt.date > endDate) dateMatch = false; return textMatch && dateMatch;
-  });
-
-  // RAPORLAMA
+  const filteredReceipts = receipts.filter(receipt => { const textMatch = receipt.merchantName?.toLowerCase().includes(searchTerm.toLowerCase()) || receipt.category?.toLowerCase().includes(searchTerm.toLowerCase()); let dateMatch = true; if (startDate && receipt.date < startDate) dateMatch = false; if (endDate && receipt.date > endDate) dateMatch = false; return textMatch && dateMatch; });
   const downloadExcel = () => { if (reportData.length === 0) { alert("Veri yok."); return; } const dataToExport = reportData.map(r => ({ "Tarih": r.date, "Mağaza": r.merchantName, "Kategori": r.category, "Tutar": parseFloat(r.totalAmount) })); const ws = XLSX.utils.json_to_sheet(dataToExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Harcamalar"); XLSX.writeFile(wb, `${reportTitle}.xlsx`); };
   const printReport = () => { window.print(); };
   const handleQuickExport = (type) => { const now = new Date(); let filtered = []; let title = ""; const getLocalDate = (d) => { const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${year}-${month}-${day}`; }; if (type === 'daily') { filtered = receipts.filter(r => r.date === getLocalDate(now)); title = "Gunluk_Rapor"; } else if (type === 'weekly') { const lastWeek = new Date(); lastWeek.setDate(now.getDate() - 7); lastWeek.setHours(0,0,0,0); filtered = receipts.filter(r => { const rDate = new Date(r.date); rDate.setHours(0,0,0,0); return rDate >= lastWeek; }); title = "Haftalik_Rapor"; } else if (type === 'monthly') { const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); startOfMonth.setHours(0,0,0,0); filtered = receipts.filter(r => { const rDate = new Date(r.date); rDate.setHours(0,0,0,0); return rDate >= startOfMonth; }); title = "Aylik_Rapor"; } else if (type === 'yearly') { const startOfYear = new Date(now.getFullYear(), 0, 1); startOfYear.setHours(0,0,0,0); filtered = receipts.filter(r => { const rDate = new Date(r.date); rDate.setHours(0,0,0,0); return rDate >= startOfYear; }); title = "Yillik_Rapor"; } if (filtered.length === 0) alert(`⚠️ Veri bulunamadı.`); else { setReportData(filtered); setReportTitle(title); setIsReportModalOpen(true); } };
   const handleExport = (data = filteredReceipts, filenamePrefix = "Rapor") => { if (data.length === 0) { alert("Veri yok."); return; } const dataToExport = data.map(r => ({ "Tarih": r.date, "Mağaza": r.merchantName, "Kategori": r.category, "Tutar": parseFloat(r.totalAmount) })); const ws = XLSX.utils.json_to_sheet(dataToExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Harcamalar"); XLSX.writeFile(wb, `${filenamePrefix}.xlsx`); };
 
-  // HESAPLAMALAR
   const activeReceipts = filteredReceipts.filter(r => !r.isCancelled);
   const totalSpent = activeReceipts.reduce((a, c) => a + parseFloat(c.totalAmount||0), 0);
   const budgetPercent = budget > 0 ? (totalSpent / budget) * 100 : 0;
@@ -133,13 +111,29 @@ export default function Home() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex font-sans text-slate-800 dark:text-slate-100 transition-colors duration-300">
-      <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 hidden md:flex flex-col fixed h-full z-10 overflow-y-auto transition-colors duration-300">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800"><h1 className="text-2xl font-bold flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><Receipt className="w-8 h-8" /> Fiş Takip</h1><p className="text-xs text-slate-400 mt-1 pl-10">Hoş Geldin, {user.name}</p></div>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex font-sans text-slate-800 dark:text-slate-100 transition-colors duration-300 relative">
+      
+      {/* MOBİL İÇİN OVERLAY (MENÜ AÇIKKEN ARKA PLANI KARART) */}
+      {isSidebarOpen && (
+          <div 
+              className="fixed inset-0 bg-black/50 z-20 md:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+          ></div>
+      )}
+
+      {/* SIDEBAR - MOBİL UYUMLU */}
+      <aside className={`fixed md:sticky top-0 left-0 h-full w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-30 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 overflow-y-auto`}>
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><Receipt className="w-8 h-8" /> Fiş Takip</h1>
+                <p className="text-xs text-slate-400 mt-1 pl-10">Hoş Geldin, {user.name}</p>
+            </div>
+            {/* Mobil menü kapatma butonu */}
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-1 text-slate-500"><X/></button>
+        </div>
         <nav className="flex-1 p-4 space-y-1">
             <button className="flex items-center gap-3 w-full p-3 text-sm font-medium text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg"><LayoutDashboard className="w-5 h-5"/> Gösterge Paneli</button>
             
-            {/* 👇 BURASI EKLENDİ: FİNANS SAYFASI LİNKİ */}
             <Link href="/finance" className="flex items-center gap-3 w-full p-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-lg transition-colors"><Wallet className="w-5 h-5"/> Finansal Durum</Link>
             
             <div className="pt-6 pb-2 text-[10px] font-extrabold text-slate-400 px-3 uppercase tracking-wider">Hızlı Raporlar</div>
@@ -153,19 +147,28 @@ export default function Home() {
         </nav>
       </aside>
 
-      <main className="flex-1 md:ml-64 p-8 pb-24 transition-colors duration-300">
+      <main className="flex-1 p-4 md:p-8 pb-24 transition-colors duration-300 w-full">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-            <div><h2 className="text-2xl font-bold dark:text-white">Gösterge Paneli</h2><p className="text-slate-500 dark:text-slate-400 text-sm">Harcamalarını buradan analiz et.</p></div>
-            <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                <label className="cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex gap-2 dark:text-slate-200"><UploadCloud className="w-4 h-4"/> Fiş Seç<input type="file" onChange={(e)=>setFile(e.target.files[0])} accept="image/*" className="hidden"/></label>
-                <button onClick={handleUpload} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-lg shadow-indigo-200/50">Analiz Et ✨</button>
-                <button onClick={() => setIsManualOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-emerald-200/50 flex items-center gap-2"><PlusCircle className="w-4 h-4"/> Ekle</button>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+                {/* 👇 MOBİL HAMBURGER MENÜ BUTONU */}
+                <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                    <Menu className="w-6 h-6" />
+                </button>
+                <div><h2 className="text-xl md:text-2xl font-bold dark:text-white">Gösterge Paneli</h2><p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm">Harcamalarını buradan analiz et.</p></div>
+            </div>
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 w-full md:w-auto justify-between md:justify-start">
+                <label className="cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-2 rounded-lg text-xs md:text-sm font-medium flex gap-2 dark:text-slate-200"><UploadCloud className="w-4 h-4"/> <span className="hidden sm:inline">Fiş Seç</span><input type="file" onChange={(e)=>setFile(e.target.files[0])} accept="image/*" className="hidden"/></label>
+                <div className="flex gap-2">
+                    <button onClick={handleUpload} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs md:text-sm font-medium shadow-lg shadow-indigo-200/50">Analiz Et ✨</button>
+                    <button onClick={() => setIsManualOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs md:text-sm font-medium shadow-lg shadow-emerald-200/50 flex items-center gap-2"><PlusCircle className="w-4 h-4"/><span className="hidden sm:inline">Ekle</span></button>
+                </div>
             </div>
         </header>
 
         {status && <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-xl flex items-center gap-3 border border-indigo-100 dark:border-indigo-800 animate-pulse"><AlertCircle className="w-5 h-5" /> {status}</div>}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* KARTLAR GRID (MOBİLDE TEK SÜTUN) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
             <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"><div className="relative z-10"><p className="text-emerald-100 text-sm font-medium flex items-center gap-2"><Wallet className="w-4 h-4"/> Aylık Gelir</p><h3 className="text-2xl font-bold mt-1">{income.toLocaleString()} ₺</h3></div><Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-emerald-400/20" /></div>
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm"><p className="text-slate-500 dark:text-slate-400 text-sm font-medium flex items-center gap-2"><TrendingDown className="w-4 h-4 text-rose-500"/> Toplam Gider</p><h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{totalSpent.toLocaleString()} ₺</h3><div className="mt-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2"><div className="bg-rose-500 h-2 rounded-full" style={{width: income > 0 ? `${Math.min((totalSpent/income)*100, 100)}%` : '0%'}}></div></div></div>
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden"><p className="text-slate-500 dark:text-slate-400 text-sm font-medium flex items-center gap-2"><RefreshCw className="w-4 h-4 text-blue-500"/> Sabit Giderler</p><h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{recurringTotal.toLocaleString()} ₺</h3></div>
@@ -174,7 +177,7 @@ export default function Home() {
 
         <div className="mb-8">
             <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2"><Target className="w-5 h-5 text-purple-600"/> Hedef Kumbaraları</h3><button onClick={() => setIsGoalModalOpen(true)} className="text-sm text-purple-600 dark:text-purple-400 font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20 px-3 py-1 rounded-lg transition">+ Yeni Hedef</button></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {goals.map((goal) => {
                     const progress = (goal.savedAmount / goal.targetAmount) * 100;
                     return (
@@ -217,6 +220,7 @@ export default function Home() {
       {isManualOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in duration-200"><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-slate-800 dark:text-white">Manuel Ekle</h3><button onClick={() => setIsManualOpen(false)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button></div><form onSubmit={handleManualSubmit} className="space-y-4"><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Açıklama</label><input type="text" required placeholder="Örn: Kira" value={manualData.merchantName} onChange={(e) => setManualData({...manualData, merchantName: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg"/></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tarih</label><input type="date" required value={manualData.date} onChange={(e) => setManualData({...manualData, date: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg"/></div><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tutar</label><input type="number" required placeholder="0.00" value={manualData.totalAmount} onChange={(e) => setManualData({...manualData, totalAmount: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg font-bold"/></div></div><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Kategori</label><select value={manualData.category} onChange={(e) => setManualData({...manualData, category: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg bg-white">{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div><div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 cursor-pointer" onClick={() => setManualData({...manualData, isRecurring: !manualData.isRecurring})}><div className={`w-5 h-5 rounded border flex items-center justify-center ${manualData.isRecurring ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300 dark:bg-slate-900 dark:border-slate-600'}`}>{manualData.isRecurring && <span className="text-white text-xs">✓</span>}</div><span className="text-sm text-slate-600 dark:text-slate-300 select-none">Sabit Ödeme (Abonelik)</span></div><button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-xl font-bold mt-4 shadow-lg shadow-emerald-200">Kaydet ✅</button></form></div></div>}
       {isGoalModalOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200"><div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-slate-800 dark:text-white">Yeni Hedef 🎯</h3><button onClick={() => setIsGoalModalOpen(false)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button></div><form onSubmit={handleAddGoal} className="space-y-4"><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hedef Adı</label><input type="text" required placeholder="Örn: Tatil" value={newGoalData.title} onChange={(e) => setNewGoalData({...newGoalData, title: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg"/></div><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Hedef Tutar</label><input type="number" required placeholder="50000" value={newGoalData.targetAmount} onChange={(e) => setNewGoalData({...newGoalData, targetAmount: e.target.value})} className="w-full p-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg font-bold"/></div><div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Renk Seç</label><div className="flex gap-2">{goalColors.map(c => <div key={c} onClick={() => setNewGoalData({...newGoalData, color: c})} className={`w-8 h-8 rounded-full cursor-pointer border-2 ${c} ${newGoalData.color === c ? 'border-slate-800 dark:border-white' : 'border-transparent'}`}></div>)}</div></div><button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-xl font-bold mt-4 shadow-lg shadow-purple-200">Hedefi Oluştur 🚀</button></form></div></div>}
       {isReportModalOpen && ( <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"> <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl p-8 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"> <div className="flex justify-between items-center mb-6 border-b pb-4"> <div><h3 className="text-2xl font-bold text-slate-800 dark:text-white">{reportTitle}</h3><p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{reportData.length} kayıt listeleniyor</p></div> <button onClick={() => setIsReportModalOpen(false)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button> </div> <div className="flex-1 overflow-y-auto mb-6 border rounded-xl dark:border-slate-700"> <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300"> <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase font-semibold text-slate-500 sticky top-0"><tr><th className="px-6 py-4">Tarih</th><th className="px-6 py-4">Mağaza</th><th className="px-6 py-4">Kategori</th><th className="px-6 py-4 text-right">Tutar</th></tr></thead> <tbody className="divide-y divide-slate-100 dark:divide-slate-700"> {reportData.map((r, i) => (<tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800"><td className="px-6 py-3">{r.date}</td><td className="px-6 py-3 font-medium text-slate-800 dark:text-white">{r.merchantName}</td><td className="px-6 py-3">{r.category}</td><td className="px-6 py-3 text-right font-bold text-slate-700 dark:text-slate-300">{r.totalAmount} ₺</td></tr>))} </tbody> </table> </div> <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800 p-4 rounded-xl"> <div className="text-lg font-bold text-indigo-700 dark:text-indigo-400">Toplam: {reportData.reduce((a,c)=>a+parseFloat(c.totalAmount||0),0).toLocaleString()} ₺</div> <div className="flex gap-3"> <button onClick={printReport} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-600 font-medium"><Printer className="w-4 h-4"/> Yazdır</button> <button onClick={downloadExcel} className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 font-medium shadow-lg shadow-green-200"><Download className="w-4 h-4"/> Excel İndir</button> </div> </div> </div> </div> )}
+      
       <div className="fixed bottom-6 right-6 z-50">{!isChatOpen ? <button onClick={() => setIsChatOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-2xl animate-bounce"><MessageCircle className="w-8 h-8"/></button> : <div className="bg-white w-80 h-96 rounded-2xl shadow-2xl border flex flex-col"><div className="bg-indigo-600 p-4 text-white flex justify-between"><span>FişBot 🤖</span><button onClick={()=>setIsChatOpen(false)}><X/></button></div><div className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-3">{chatMessages.map((m,i)=><div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}><div className={`p-3 rounded-xl text-sm ${m.role==='user'?'bg-indigo-600 text-white':'bg-white border'}`}>{m.text}</div></div>)}{chatLoading&&<Loader2 className="animate-spin"/>}<div ref={chatEndRef}></div></div><form onSubmit={handleSendMessage} className="p-3 border-t flex gap-2"><input className="flex-1 p-2 bg-slate-100 rounded" value={chatInput} onChange={e=>setChatInput(e.target.value)}/><button type="submit"><Send/></button></form></div>}</div>
     </div>
   );
