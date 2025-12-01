@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation';
 
 const AuthContext = createContext();
 
+// 👇 API Adresini Belirle
+// Eğer Vercel'de (Production) isek Environment Variable kullan, yoksa localhost.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
     useEffect(() => {
-        // Sayfa yenilenince localStorage'dan kullanıcıyı geri yükle
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
@@ -19,46 +22,54 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
     }, []);
 
-    // GİRİŞ YAPMA FONKSİYONU
+    // GİRİŞ YAP
     const login = async (email, password) => {
         try {
-            const res = await fetch('/api/auth/login', {
+            // 👇 URL'yi dinamik yaptık
+            const res = await fetch(`${API_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
+
+            // Hata varsa JSON parse etmeden yakala
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Giriş başarısız.');
+            }
+
             const data = await res.json();
 
-            if (!res.ok) throw new Error(data.error);
-
-            // Kullanıcıyı ve Token'ı kaydet
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
             setUser(data.user);
-            router.push('/'); // Ana sayfaya yönlendir
+            router.push('/');
             return { success: true };
         } catch (error) {
             return { success: false, error: error.message };
         }
     };
 
-    // KAYIT OLMA FONKSİYONU
+    // KAYIT OL
     const register = async (name, email, password) => {
         try {
-            const res = await fetch('/api/auth/register', {
+            const res = await fetch(`${API_URL}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, password }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Kayıt başarısız.');
+            }
+            
             return { success: true };
         } catch (error) {
             return { success: false, error: error.message };
         }
     };
 
-    // ÇIKIŞ YAPMA
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -66,7 +77,6 @@ export const AuthProvider = ({ children }) => {
         router.push('/login');
     };
 
-    // AYARLARI GÜNCELLEME (Frontend State'ini günceller)
     const updateUser = (updatedData) => {
         const newUser = { ...user, ...updatedData };
         setUser(newUser);
@@ -74,7 +84,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, register, logout, updateUser, loading }}>
+        <AuthContext.Provider value={{ user, login, register, logout, updateUser, loading, API_URL }}>
             {children}
         </AuthContext.Provider>
     );
